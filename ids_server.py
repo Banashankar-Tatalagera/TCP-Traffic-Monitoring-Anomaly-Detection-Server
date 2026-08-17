@@ -13,6 +13,7 @@ blocked_ips = {}  # Stores blocked IPs with unblock timestamps
 server_socket = None
 running = False  # Controls server state
 log_queue = queue.Queue()
+state_lock = threading.Lock()  # Protects request_counts and blocked_ips across client threads
 
 def log_message(message):
     print(message)  # Print to terminal
@@ -21,39 +22,40 @@ def log_message(message):
 def detect_attack(client_socket, client_address, data):
     ip = client_address[0]
 
-    # Check if IP is blocked
-    if ip in blocked_ips and time.time() < blocked_ips[ip]:
-        log_message(f"🚫 [BLOCKED] Dropping connection from {ip}.")
-        client_socket.close()
-        return
+    with state_lock:
+        # Check if IP is blocked
+        if ip in blocked_ips and time.time() < blocked_ips[ip]:
+            log_message(f"🚫 [BLOCKED] Dropping connection from {ip}.")
+            client_socket.close()
+            return
 
-    # Unblock IP if time has passed
-    if ip in blocked_ips and time.time() > blocked_ips[ip]:
-        del blocked_ips[ip]
+        # Unblock IP if time has passed
+        if ip in blocked_ips and time.time() > blocked_ips[ip]:
+            del blocked_ips[ip]
 
-    # Track incoming requests
-    if ip not in request_counts:
-        request_counts[ip] = []
-    
-    request_counts[ip].append(time.time())
+        # Track incoming requests
+        if ip not in request_counts:
+            request_counts[ip] = []
 
-    # Keep only the last 5 seconds of request history
-    request_counts[ip] = [t for t in request_counts[ip] if time.time() - t < 5]
+        request_counts[ip].append(time.time())
 
-    # Attack Detection
-    if data == "SYN_FLOOD":
-        log_message(f"⚠ 🔃 SYN Flood detected from {ip}! 🌊")
-    elif data == "UDP_FLOOD":
-        log_message(f"⚠ 📤📥 UDP Flood detected from {ip}! 🌊")
-    elif data == "ICMP_FLOOD":
-        log_message(f"⚠ 📡💬 ICMP Ping Flood detected from {ip}! 🌊")
-    
-    # Detect DoS attack (too many requests in 5 seconds)
-    elif len(request_counts[ip]) > BLOCK_THRESHOLD:
-        log_message(f"🚨 [ALERT] DoS attack detected from {ip}! 🚀 Blocking for {BLOCK_TIME} seconds.")
-        blocked_ips[ip] = time.time() + BLOCK_TIME
-    else:
-        log_message(f"✅ [INFO] Connection from {ip} accepted. 🔗")
+        # Keep only the last 5 seconds of request history
+        request_counts[ip] = [t for t in request_counts[ip] if time.time() - t < 5]
+
+        # Attack Detection
+        if data == "SYN_FLOOD":
+            log_message(f"⚠ 🔃 SYN Flood detected from {ip}! 🌊")
+        elif data == "UDP_FLOOD":
+            log_message(f"⚠ 📤📥 UDP Flood detected from {ip}! 🌊")
+        elif data == "ICMP_FLOOD":
+            log_message(f"⚠ 📡💬 ICMP Ping Flood detected from {ip}! 🌊")
+
+        # Detect DoS attack (too many requests in 5 seconds)
+        elif len(request_counts[ip]) > BLOCK_THRESHOLD:
+            log_message(f"🚨 [ALERT] DoS attack detected from {ip}! 🚀 Blocking for {BLOCK_TIME} seconds.")
+            blocked_ips[ip] = time.time() + BLOCK_TIME
+        else:
+            log_message(f"✅ [INFO] Connection from {ip} accepted. 🔗")
 
     client_socket.close()
 
@@ -92,19 +94,19 @@ def run_streamlit():
     """Runs the Streamlit UI"""
     st.title("Intrusion Detection System (IDS)")
     st.subheader("Control Panel")
-    
+
     if st.button("Start IDS Server"):
         if not running:
             threading.Thread(target=start_server, daemon=True).start()
         else:
             st.warning("Server is already running.")
-    
+
     if st.button("Stop IDS Server"):
         stop_server()
-    
+
     st.subheader("Logs")
     log_output = st.empty()
-    
+
     while True:
         logs = []
         while not log_queue.empty():
