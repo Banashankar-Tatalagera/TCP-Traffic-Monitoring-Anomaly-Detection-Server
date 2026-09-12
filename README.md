@@ -1,7 +1,7 @@
 
-# 🛡 IDS-SOCKET-PROGRAMMING
+# 🛡 TCP Traffic Monitoring Anomaly Detection Server
 
-This is a simple Intrusion Detection System (IDS) built using Python and socket programming, with an interactive Streamlit interface. It detects basic DoS-style attacks like SYN, UDP, and ICMP floods.
+This is a simple Traffic Monitoring Anomaly Detection Server built using Python and socket programming, with an interactive Streamlit interface. It detects basic DoS-style attacks like SYN, UDP, and ICMP floods.
 
 ---
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
